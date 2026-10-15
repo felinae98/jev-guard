@@ -9,8 +9,9 @@ const [cmd, ...rest] = process.argv.slice(2);
 
 const USAGE = `jev-guard — prompt-injection and dangerous-action guard for coding agents, powered by Jev
 
-  jev-guard hook [--agent codex|copilot]  Command hook (JSON on stdin → JSON on stdout) for Claude Code, Codex, Copilot CLI,
-                                          Gemini CLI and Cursor; the host is detected from the payload, --agent overrides
+  jev-guard hook [--agent codex|copilot|agy|commandcode]
+                                          Command hook (JSON on stdin → JSON on stdout) for Claude Code, Codex, Copilot CLI,
+                                          Command Code, Gemini CLI and Cursor; the host is detected from the payload, --agent overrides
   jev-guard acp -- <agent command...>     ACP proxy: jev-guard acp -- claude-agent-acp
   jev-guard check <tool> '<json input>'   Assess one tool call, e.g. check Bash '{"command":"rm -rf /"}'
   jev-guard scan [file]                   Scan a file (or stdin) for AI-directed instructions
@@ -18,13 +19,14 @@ const USAGE = `jev-guard — prompt-injection and dangerous-action guard for cod
                                           agent's user dirs + the current project) for instructions their installer
                                           would not expect; cached by content hash, exit 2 if anything is flagged
   jev-guard install <agent>               Register in that agent's user config:
-                                          claude | codex | copilot | gemini | agy | cursor | pi | opencode
+                                          claude | codex | copilot | commandcode | gemini | agy | cursor | pi | opencode
   jev-guard key <api key>                 Save the key to ~/.jev-guard/config.json (0600); vck_… keys are
                                           treated as Vercel AI Gateway keys, sk-or-… keys as OpenRouter,
                                           anything else as TypeSafe (--gateway / --openrouter override)
 
 Credentials are read from JEV_API_KEY / AI_GATEWAY_API_KEY / VERCEL_OIDC_TOKEN first, then from that file, then
-from OPENROUTER_API_KEY. JEV_BASE_URL points at any other System One server (e.g. a local Kev) and takes precedence.`;
+from OPENROUTER_API_KEY, then from the key "cmd login" stores for Command Code (~/.commandcode/auth.json).
+JEV_BASE_URL points at any other System One server (e.g. a local Kev) and takes precedence.`;
 
 switch (cmd) {
   case "hook": {
@@ -116,6 +118,15 @@ function install(target) {
       for (const ev of ["PreToolUse", "PostToolUse", "UserPromptSubmit", "SessionStart"]) cfg.hooks[ev] = [{ type: "command", bash: cmd(" --agent copilot"), timeoutSec: 30 }];
       break;
     }
+    case "commandcode": {  // Command Code hooks only allow/deny (no ask), so ask lands as a warning; no UserPromptSubmit event
+      file = join(home, ".commandcode", "settings.json");
+      cfg = readJson(file);
+      cfg.hooks ??= {};
+      const entry = { hooks: [{ type: "command", command: cmd(" --agent commandcode"), timeout: 30 }] };
+      for (const ev of ["PreToolUse", "PostToolUse", "SessionStart"]) cfg.hooks[ev] = [...notOurs(cfg.hooks[ev]), entry];
+      note = "Restart Command Code (cmd) to load the hooks. Jev calls ride the key `cmd login` stored in ~/.commandcode/auth.json unless another key is configured.";
+      break;
+    }
     case "gemini": {
       file = join(home, ".gemini", "settings.json");
       cfg = readJson(file);
@@ -179,7 +190,7 @@ function install(target) {
       return;
     }
     default:
-      die("install target must be one of claude, codex, copilot, gemini, agy, cursor, pi, opencode (ACP is configured in the editor: see README)");
+      die("install target must be one of claude, codex, copilot, commandcode, gemini, agy, cursor, pi, opencode (ACP is configured in the editor: see README)");
   }
   writeJson(file, cfg);
   console.log(`jev-guard: written to ${file}${note ? "\n" + note : ""}`);
@@ -188,7 +199,7 @@ function install(target) {
 
 async function keyHint() {
   const { backend } = await import("./jev.js");
-  if (!backend()) console.log("No API key found yet: run `jev-guard key <key>` (or export JEV_API_KEY / OPENROUTER_API_KEY / AI_GATEWAY_API_KEY, or JEV_BASE_URL for a local server). Until then the guard fails open.");
+  if (!backend()) console.log("No API key found yet: run `jev-guard key <key>` (or export JEV_API_KEY / OPENROUTER_API_KEY / AI_GATEWAY_API_KEY, or JEV_BASE_URL for a local server, or `cmd login` for the Command Code fallback). Until then the guard fails open.");
 }
 
 function readJson(file) { return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {}; }

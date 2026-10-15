@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- Command Code: `jev-guard install commandcode` writes `PreToolUse`/`PostToolUse`/`SessionStart` hooks into `~/.commandcode/settings.json` (its hooks only allow/deny, so `ask` degrades to a warning; payload detected via `tool_display_name`). With no other key configured, Jev rides the Command Code Provider API with the key `cmd login` stores in `~/.commandcode/auth.json` (model `typesafe/jev`).
 - Files under `.claude/`, `.codex/`, `.gemini/` or `.cursor/` `docs/` and `reference/` count as instruction files (#1).
 - OpenCode/Kilo: `skill` results are checked as instruction files, not as untrusted content (#2).
 - `Task`/`Agent` results are scanned for injection; out-of-range thresholds fall back to their defaults (#3).

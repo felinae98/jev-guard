@@ -8,11 +8,13 @@ import { buildContext } from "./context.js";
 import { readSession, remember, markReported, update } from "./session.js";
 import { findInstructionFiles, projectRoots, scanFiles, scanInstructionsCached } from "./skills.js";
 
-// Which Claude-shaped host sent this? Copilot CLI stamps an ISO `timestamp`, Codex a `turn_id`; Claude Code has neither.
+// Which Claude-shaped host sent this? Copilot CLI stamps an ISO `timestamp`, Codex a `turn_id` + model; Claude Code
+// has neither, Command Code adds `tool_display_name` (SHELL/READ/WRITE/EDIT).
 export function detectAgent(input) {
   if (input.workspacePaths || input.conversationId || input.toolCall) return "agy";
   if (typeof input.timestamp === "string" && typeof input.turn_id !== "string") return "copilot";
   if (typeof input.turn_id === "string" && typeof input.model === "string") return "codex";
+  if (typeof input.tool_display_name === "string") return "commandcode";
   return "claude";
 }
 
@@ -124,7 +126,7 @@ export async function handleHook(input, { agent, env = process.env, fetchImpl, e
     const decision = (d) => ({ hookSpecificOutput: { hookEventName: event, permissionDecision: d, permissionDecisionReason: r.message } });
     if (agent === "copilot") return { permissionDecision: r.level, permissionDecisionReason: r.message, ...decision(r.level) };
     if (r.level === "deny") return decision("deny");
-    if (agent === "codex") {  // ask unsupported (Codex 0.154): warn the model and the user, let the call proceed
+    if (agent === "codex" || agent === "commandcode") {  // ask unsupported (Codex 0.154; Command Code hooks only allow/deny): warn the model and the user, let the call proceed
       return { systemMessage: r.message, hookSpecificOutput: { hookEventName: event, additionalContext: `${r.message}. Confirm with the user before running this or anything similar.` } };
     }
     return decision("ask");

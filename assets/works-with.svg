@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1254 64" role="img" aria-label="Works with Claude Code, Codex, Copilot CLI, Gemini CLI, Cursor, pi, OpenCode, ACP">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1474 64" role="img" aria-label="Works with Claude Code, Codex, Copilot CLI, Gemini CLI, Cursor, pi, OpenCode, ACP, Command Code">
   <style>
     .chip { fill: #F1F5F9; stroke: #CBD5E1; stroke-width: 2; }
     .label { font: 600 20px/1 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #0F172A; }
@@ -44,6 +44,11 @@
       <rect class="chip" width="108" height="40" rx="20"/>
       <path class="check" d="M16 20l7 7 13-14"/>
       <text class="label" x="46" y="27">ACP</text>
+    </g>
+    <g transform="translate(1266 12)">
+      <rect class="chip" width="200" height="40" rx="20"/>
+      <path class="check" d="M16 20l7 7 13-14"/>
+      <text class="label" x="46" y="27">Command Code</text>
     </g>
   </g>
 </svg>

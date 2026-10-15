@@ -4,8 +4,9 @@
 const TYPESAFE_URL = "https://api.typesafe.ai/v1/systemone";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/systemone";   // https://openrouter.ai/docs/guides/community/typesafe-sdk
 const GATEWAY_URL = "https://ai-gateway.vercel.sh/v4/ai/evaluation-model";
+const COMMANDCODE_URL = "https://api.commandcode.ai/provider/v1/systemone";
 const SYSTEMONE_PATH = "/v1/systemone";
-const DEFAULT_MODEL = { custom: "jev-latest", typesafe: "jev-latest", openrouter: "jev-1.13", gateway: "typesafe-ai/jev" };
+const DEFAULT_MODEL = { custom: "jev-latest", typesafe: "jev-latest", openrouter: "jev-1.13", gateway: "typesafe-ai/jev", commandcode: "typesafe/jev" };
 const LOOPBACK = new Set(["localhost", "[::1]"]);
 // Plain http is fine where the traffic never leaves this machine or the private network: loopback and RFC 1918
 // (e.g. a Kev in Docker at the bridge IP 172.17.0.1).
@@ -35,7 +36,19 @@ export function backend(env = process.env) {
   if (cfg.aiGatewayApiKey) return { kind: "gateway", key: cfg.aiGatewayApiKey, auth: "api-key" };
   // OPENROUTER_API_KEY is shared with many other tools, so it only applies when no Jev-specific key is configured.
   if (env.OPENROUTER_API_KEY) return { kind: "openrouter", key: env.OPENROUTER_API_KEY };
+  // Last resort: the key `cmd login` stores for the Command Code CLI is also a Provider API key (same System One
+  // shape, model `typesafe/jev`). Any key configured above wins; this is the bundled fallback for logged-in machines.
+  const ccKey = commandCodeKey(env);
+  if (ccKey) return { kind: "commandcode", key: ccKey };
   return null;
+}
+
+/** The API key `cmd login` stores in Command Code's auth file; the Provider API accepts it as-is. */
+export function commandCodeKey(env = process.env) {
+  try {
+    const auth = JSON.parse(readFileSync(env.COMMANDCODE_AUTH_FILE ?? join(homedir(), ".commandcode", "auth.json"), "utf8"));
+    return typeof auth.apiKey === "string" && auth.apiKey ? auth.apiKey : null;
+  } catch { return null; }
 }
 
 /** `<base>/v1/systemone` for a System One server; https only, except plain http to this machine or a private address. */
@@ -55,7 +68,7 @@ export function readConfig(env = process.env) {
 /** @returns {Promise<Record<string, {p?: number, choice?: string, score?: number, probabilities?: Record<string, number>, confidence?: number}>>} */
 export async function ask(state, questions, { env = process.env, fetchImpl = fetch, signal, timeoutMs } = {}) {
   const b = backend(env);
-  if (!b) throw new Error("no credentials: run `jev-guard key <key>` or set JEV_API_KEY / OPENROUTER_API_KEY / AI_GATEWAY_API_KEY / JEV_BASE_URL");
+  if (!b) throw new Error("no credentials: run `jev-guard key <key>` or set JEV_API_KEY / OPENROUTER_API_KEY / AI_GATEWAY_API_KEY / JEV_BASE_URL (or log in with `cmd login` for the Command Code fallback)");
   const gw = b.kind === "gateway";
   const q = gw ? mapValues(questions, (x) => (x.type === "noul" ? { ...x, type: "boolean" } : x)) : questions;
   // One budget for the whole call, retries included: every host kills a hook at ~30 s, and a hook that dies
@@ -63,7 +76,7 @@ export async function ask(state, questions, { env = process.env, fetchImpl = fet
   const budget = AbortSignal.timeout(timeoutMs ?? +(env.JEV_GUARD_TIMEOUT_MS || 20_000));
   const abort = signal ? AbortSignal.any([signal, budget]) : budget;
   const model = env.JEV_MODEL ?? DEFAULT_MODEL[b.kind];
-  const url = { custom: b.url, typesafe: TYPESAFE_URL, openrouter: OPENROUTER_URL, gateway: GATEWAY_URL }[b.kind];
+  const url = { custom: b.url, typesafe: TYPESAFE_URL, openrouter: OPENROUTER_URL, gateway: GATEWAY_URL, commandcode: COMMANDCODE_URL }[b.kind];
   const request = () => fetchImpl(url, {
     method: "POST",
     headers: gw
